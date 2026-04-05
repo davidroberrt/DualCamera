@@ -6,6 +6,12 @@ import Photos
 class DualCameraViewModel: NSObject, ObservableObject {
     let session = AVCaptureMultiCamSession()
     
+    @Published var alertMessage: String? = nil
+    @Published var showAlert = false
+
+    private var finishedRecordings = 0
+    private var recordingErrors: [Error] = []
+    
     @Published var isRecording = false
     @Published var isFrontPrimary = false
     
@@ -81,6 +87,9 @@ class DualCameraViewModel: NSObject, ObservableObject {
             frontOutput.stopRecording()
             backOutput.stopRecording()
         } else {
+            finishedRecordings = 0
+            recordingErrors.removeAll()
+            
             let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             let frontURL = docs.appendingPathComponent("front_\(UUID().uuidString).mov")
             let backURL = docs.appendingPathComponent("back_\(UUID().uuidString).mov")
@@ -88,15 +97,38 @@ class DualCameraViewModel: NSObject, ObservableObject {
             frontOutput.startRecording(to: frontURL, recordingDelegate: self)
             backOutput.startRecording(to: backURL, recordingDelegate: self)
         }
+        
         isRecording.toggle()
     }
 }
 
 extension DualCameraViewModel: AVCaptureFileOutputRecordingDelegate {
-    func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL, from connections: [AVCaptureConnection], error: Error?) {
-        if error == nil {
+    func fileOutput(
+        _ output: AVCaptureFileOutput,
+        didFinishRecordingTo outputFileURL: URL,
+        from connections: [AVCaptureConnection],
+        error: Error?
+    ) {
+        if let error = error {
+            recordingErrors.append(error)
+        } else {
             PHPhotoLibrary.shared().performChanges {
                 PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: outputFileURL)
+            }
+        }
+        
+        finishedRecordings += 1
+        
+        // 🔥 Espera os DOIS vídeos terminarem
+        if finishedRecordings == 2 {
+            DispatchQueue.main.async {
+                if self.recordingErrors.isEmpty {
+                    self.alertMessage = "✅ Vídeo salvo na galeria"
+                } else {
+                    self.alertMessage = "❌ Erro ao salvar o vídeo"
+                }
+                
+                self.showAlert = true
             }
         }
     }

@@ -84,6 +84,11 @@ struct ContentView: View {
                     y: miniSize.height/2 + margin + 40
                 )
             }
+            .alert("Gravação", isPresented: $vm.showAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(vm.alertMessage ?? "")
+            }
         }
     }
     
